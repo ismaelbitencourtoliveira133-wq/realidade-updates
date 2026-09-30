@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hotbar</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+
+/* body/html transparentes e SEM capturar eventos — cliques fora dos slots passam para o jogo */
+html,body{width:100%;height:100%;overflow:hidden;background:transparent;pointer-events:none;}
+
+#stage{
+  position:fixed;left:50%;bottom:0;
+  width:1920px;
+  transform:translateX(-50%) scale(var(--s,1));
+  transform-origin:bottom center;
+  display:flex;justify-content:center;
+  flex-direction:column;
+  align-items:center;
+  padding-bottom:22px;
+  pointer-events:none; /* stage não captura — só os .slot capturam */
+}
+
+.hotbar{
+  display:flex;
+  gap:6px;
+  align-items:flex-end;
+  pointer-events:none; /* a hotbar em si não captura, só os filhos .slot */
+}
+
+.slot{
+  position:relative;
+  width:100px;height:118px;
+  background:rgba(30,30,30,.85);
+  border:2px solid rgba(138,138,138,.7);
+  outline:1px solid rgba(91,91,91,.5);
+  outline-offset:-3px;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:border-color .12s, background .12s;
+  pointer-events:all; /* SÓ os slots capturam toque */
+}
+.slot:hover{border-color:#c0c0c0;background:rgba(50,50,50,.9);}
+.slot.active{
+  border-color:#3d5fd6;
+  box-shadow:0 0 0 1px #3d5fd6, inset 0 0 14px rgba(61,95,214,.4);
+}
+
+.slot .key{
+  position:absolute;top:5px;left:7px;
+  font:600 13px 'Segoe UI',system-ui,sans-serif;
+  color:rgba(180,180,180,.7);
+  pointer-events:none;
+}
+.slot.has .key{color:rgba(200,200,200,.9);}
+
+.slot .icon{
+  width:74px;height:74px;
+  object-fit:contain;
+  pointer-events:none;
+  -webkit-user-drag:none;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));
+}
+
+/* placeholder só aparece se a imagem falhar E não houver imagem definida */
+.slot .ph{
+  width:62px;height:62px;
+  display:flex;align-items:center;justify-content:center;
+  background:#333;border:1px dashed #666;
+  color:#999;font-weight:700;font-size:16px;
+  pointer-events:none;
+}
+
+/* qty e name REMOVIDOS — hotbar só mostra ícone */
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="hotbar" id="hotbar"></div>
+</div>
+<script>
+const SIZES = 5;
+let ITEMS = {};
+const state = Array(SIZES).fill(null);
+let activeSlot = -1;
+
+const $ = s => document.querySelector(s);
+
+/* ---------- escala ---------- */
+function fit(){
+  const s = Math.min(innerWidth/1920, innerHeight/1080);
+  document.documentElement.style.setProperty('--s', s);
+}
+addEventListener('resize', fit);
+fit();
+
+/* ---------- bridge Android ---------- */
+function postBridge(event, data){
+  if(window.HotbarBridge){
+    try{ window.HotbarBridge.onAction(event, JSON.stringify(data||{})); }catch(e){}
+  }
+}
+
+/* Chamado pelo inventário quando a hotbar muda */
+window.sincronizarDoInventario = function(json){
+  try{
+    const d = JSON.parse(json);
+    if(d.hotbar){
+      state.fill(null);
+      d.hotbar.forEach(o => {
+        if(o.slot >= 1 && o.slot <= SIZES && o.item)
+          state[o.slot-1] = {id: o.item, qty: o.amount, weapon: o.weapon||0};
+      });
+    }
+    render();
+  }catch(e){}
+};
+
+/* Chamado pelo Java para atualizar hotbar */
+window.carregarHotbar = function(json){
+  try{
+    const d = JSON.parse(json);
+    if(d.items) ITEMS = d.items;
+    if(d.hotbar){
+      state.fill(null);
+      d.hotbar.forEach(o => {
+        if(o.slot >= 1 && o.slot <= SIZES)
+          state[o.slot-1] = {id: o.item, qty: o.amount, weapon: o.weapon||0};
+      });
+    }
+    if(typeof d.activeWeapon !== 'undefined') syncActive(d.activeWeapon);
+    render();
+  }catch(e){}
+};
+
+/* Chamado pelo Java quando a arma na mão muda */
+window.setActiveWeapon = function(weaponId){
+  syncActive(weaponId);
+  render();
+};
+
+function syncActive(weaponId){
+  activeSlot = -1;
+  state.forEach((s,i)=>{
+    if(s && s.weapon === weaponId) activeSlot = i;
+  });
+}
+
+/* ---------- utilitários ---------- */
+const def = id => ITEMS[id] || {label: id, weight:0, usable:false, image:''};
+
+/* Fallback: se a imagem não carregar, mostra placeholder com 2 letras */
+window.phFallback = function(img){
+  const ph = document.createElement('span');
+  ph.className = 'ph';
+  ph.textContent = (img.alt||'?').slice(0,2).toUpperCase();
+  img.replaceWith(ph);
+};
+
+/* Sempre tenta mostrar a imagem do item; só usa letra se não houver imagem */
+function iconHTML(id, it){
+  if(it && it.image && it.image.trim() !== ''){
+    return `<img class="icon" src="${it.image}" alt="${it.label||id}" draggable="false" onerror="phFallback(this)">`;
+  }
+  const ph = document.createElement('span');
+  ph.className = 'ph';
+  ph.textContent = (it && it.label ? it.label : id).slice(0,2).toUpperCase();
+  return ph.outerHTML;
+}
+
+/* ---------- render ---------- */
+function build(){
+  const el = $('#hotbar');
+  el.innerHTML = '';
+  for(let i = 0; i < SIZES; i++){
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.dataset.i = i;
+    el.appendChild(d);
+  }
+}
+
+function render(){
+  const el = $('#hotbar');
+  state.forEach((s, i) => {
+    const d = el.children[i];
+    d.className = 'slot' + (s ? ' has' : '') + (i === activeSlot ? ' active' : '');
+    let h = `<span class="key">${i + 1}</span>`;
+    if(s){
+      const it = def(s.id);
+      h += iconHTML(s.id, it);
+    }
+    d.innerHTML = h;
+  });
+}
+
+/* ---------- clique no slot ---------- */
+$('#hotbar').addEventListener('click', e => {
+  const sl = e.target.closest('.slot');
+  if(!sl) return;
+  const i = +sl.dataset.i;
+  const s = state[i];
+
+  if(!s){
+    activeSlot = -1;
+    render();
+    postBridge('unequip', { slot:i+1 });
+    return;
+  }
+
+  if(activeSlot === i){
+    const removed = state[i];
+    state[i] = null;
+    activeSlot = -1;
+    render();
+    postBridge('remove', { container:'hotbar', slot:i+1, item:removed.id, amount:removed.qty||1, weapon:removed.weapon||0 });
+  } else {
+    activeSlot = i;
+    render();
+    postBridge('use', { container:'hotbar', slot:i+1, item:s.id, amount:1, weapon:s.weapon||0 });
+  }
+});
+
+/* ---------- hotbar sempre visível — sem auto-hide ---------- */
+function showHotbar(){
+  const h = document.getElementById('hotbar');
+  h.style.opacity  = '1';
+  h.style.transform = 'translateY(0)';
+}
+
+/* ---------- início ---------- */
+build();
+render();
+showHotbar();
+</script>
+</body>
+</html>
