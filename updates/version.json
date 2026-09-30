@@ -1,12 +1,8 @@
 {
-  "version": "build_1.0.4",
+  "version": "build_1.0.5",
   "update": true,
   "update_url": "",
   "files": [
-    {
-      "path": "cef/hotbar.html",
-      "url": "https://raw.githubusercontent.com/ismaelbitencourtoliveira133-wq/realidade-updates/main/updates/cef/hotbar.html"
-    },
     {
       "path": "cef/inventario.html",
       "url": "https://raw.githubusercontent.com/ismaelbitencourtoliveira133-wq/realidade-updates/main/updates/cef/inventario.html"

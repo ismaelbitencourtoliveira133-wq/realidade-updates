@@ -8,7 +8,7 @@
 <style>
 :root{
   --slot:#484848;--slot-edge:#8a8a8a;--panel:#4a4a4a;--line:#6e6e6e;
-  --text:#f2f2f2;--muted:#9a9a9a;--accent:#3d5fd6;--w:80px;--h:96px;--gap:6px;
+  --text:#f2f2f2;--muted:#9a9a9a;--accent:#3d5fd6;--w:96px;--h:114px;--gap:6px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{width:100%;height:100%;overflow:hidden}
@@ -71,7 +71,7 @@ body{
 .slot.dragging{opacity:.35}
 .slot .key{font-size:38px;font-weight:600;color:#6d6d6d;pointer-events:none}
 .slot.has .key{position:absolute;top:4px;left:7px;font-size:12px;color:var(--muted)}
-.slot .icon{width:60px;height:60px;object-fit:contain;pointer-events:none;-webkit-user-drag:none;filter:drop-shadow(0 3px 3px rgba(0,0,0,.5))}
+.slot .icon{width:72px;height:72px;object-fit:contain;pointer-events:none;-webkit-user-drag:none;filter:drop-shadow(0 3px 3px rgba(0,0,0,.5))}
 .slot .ph{
   width:56px;height:56px;display:flex;align-items:center;justify-content:center;
   background:#3a3a3a;border:1px dashed #777;color:#bbb;font-weight:700;font-size:16px;pointer-events:none;
@@ -110,7 +110,7 @@ body{
   display:flex;align-items:center;justify-content:center;
   transform:translate(-50%,-50%);
 }
-.ghost .icon{width:68px;height:68px;object-fit:contain}
+.ghost .icon{width:80px;height:80px;object-fit:contain}
 .ghost .qty{position:absolute;top:5px;right:7px;font-size:12px;font-weight:700}
 #toast{
   position:absolute;left:50%;bottom:60px;transform:translate(-50%,20px);
@@ -173,33 +173,20 @@ let selected=null;
 const $=s=>document.querySelector(s);
 const qtyInput=$('#qty');
 
-/* ---------- bridge Android ---------- */
 function postBridge(event,data){
   if(window.InventarioBridge){
     try{ window.InventarioBridge.onAction(event,JSON.stringify(data||{})); }catch(e){}
   }
 }
 
-/* Notifica a hotbar.html sempre que a faixa hotbar mudar */
 function syncHotbar(){
-  const payload = JSON.stringify({
-    hotbar: state.hotbar.map((s,i) => s
-      ? {slot:i+1, item:s.id, amount:s.qty, weapon:s.weapon||0}
-      : {slot:i+1, item:null, amount:0, weapon:0}
-    )
-  });
-  if(window.HotbarBridge){
-    try{ window.HotbarBridge.onInventarioSync(payload); }catch(e){}
-  }
   postBridge('hotbar_sync', {hotbar: state.hotbar});
 }
 
-/* Chamado pelo Java com os dados do servidor */
 window.carregarInventario=function(json){
   try{ load(JSON.parse(json)); }catch(e){}
 };
 
-/* ---------- escala automática (base 1920x1080) ---------- */
 function fit(){
   const s=Math.min(innerWidth/1920,innerHeight/1080);
   document.documentElement.style.setProperty('--s',s);
@@ -207,7 +194,6 @@ function fit(){
 addEventListener('resize',fit);
 fit();
 
-/* ---------- utilitários ---------- */
 const fmt=n=>n>=1000?n.toLocaleString('pt-BR'):String(n);
 const def=id=>ITEMS[id]||{label:id,weight:0,usable:false,image:''};
 const wOf=s=>s?def(s.id).weight*s.qty:0;
@@ -242,7 +228,6 @@ const iconHTML=id=>{
   return s.outerHTML;
 };
 
-/* ---------- load ---------- */
 function load(d){
   if(d.maxWeight) MAX_WEIGHT=d.maxWeight;
   if(d.items) ITEMS=d.items;
@@ -257,7 +242,6 @@ function load(d){
   render();
 }
 
-/* ---------- render ---------- */
 function build(c){
   const el=$('#'+c);el.innerHTML='';
   for(let i=0;i<SIZES[c];i++){
@@ -294,7 +278,6 @@ function render(){
   $('#wbar').style.width=Math.min(100,w/MAX_WEIGHT*100)+'%';
 }
 
-/* ---------- mover ---------- */
 function move(fc,fi,tc,ti){
   const from=state[fc][fi];
   if(!from||(fc===tc&&fi===ti)) return;
@@ -322,7 +305,6 @@ function move(fc,fi,tc,ti){
   if(fc==='hotbar'||tc==='hotbar') syncHotbar();
 }
 
-/* ---------- ações ---------- */
 function act(kind){
   const s=selected&&state[selected.c][selected.i];
   if(!s){toast('Selecione um item primeiro');return;}
@@ -336,12 +318,10 @@ function act(kind){
         kind==='send'?`Enviado: ${n}x ${it.label}`:
                       `Descartado: ${n}x ${it.label}`);
   render();
-  if(selected && selected.c==='hotbar') syncHotbar();
 }
 
 document.querySelectorAll('.btn').forEach(b=>b.addEventListener('click',()=>act(b.dataset.act)));
 
-/* ---------- fechar ---------- */
 function closeInventory(){
   selected=null;render();
   if(window.InventarioBridge){
@@ -351,7 +331,6 @@ function closeInventory(){
 
 $('#btn-close').addEventListener('click',closeInventory);
 
-/* ---------- arrastar ---------- */
 let press=null,drag=null;
 const getScale=()=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--s'))||1;
 
@@ -424,7 +403,6 @@ document.addEventListener('pointerup',e=>{
 document.addEventListener('pointercancel',endDrag);
 document.addEventListener('contextmenu',e=>e.preventDefault());
 
-/* clique duplo */
 document.addEventListener('dblclick',e=>{
   const sl=e.target.closest('.slot');
   if(!sl) return;
@@ -437,7 +415,6 @@ document.addEventListener('dblclick',e=>{
   }else{selected={c,i};act('use');}
 });
 
-/* teclado */
 document.addEventListener('keydown',e=>{
   if(e.target===qtyInput) return;
   if(/^[1-5]$/.test(e.key)&&state.hotbar[+e.key-1]){selected={c:'hotbar',i:+e.key-1};act('use');}
@@ -448,7 +425,6 @@ document.addEventListener('keydown',e=>{
   }
 });
 
-/* ---------- início ---------- */
 ['hotbar','bag','ground'].forEach(build);
 render();
 </script>
